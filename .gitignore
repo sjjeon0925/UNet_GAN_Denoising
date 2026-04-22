@@ -209,3 +209,7 @@ __marimo__/
 # Temporal note text files
 _*.md
 _*.txt
+
+# Local client files
+_test_audios/
+_test_client.py
