@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>음성 노이즈 제거 서비스</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 16px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 0.875rem;
+      color: #7a7d8e;
+      margin-bottom: 36px;
+    }
+
+    .drop-zone {
+      border: 2px dashed #3a3d4e;
+      border-radius: 12px;
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      border-color: #6c8fff;
+      background: rgba(108, 143, 255, 0.05);
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .drop-primary {
+      font-size: 0.95rem;
+      color: #c0c3d0;
+      margin-bottom: 4px;
+    }
+
+    .drop-secondary {
+      font-size: 0.8rem;
+      color: #5a5d6e;
+    }
+
+    .file-info {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      background: #22253a;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-top: 16px;
+      font-size: 0.875rem;
+      color: #b0b3c0;
+    }
+
+    .file-info.visible { display: flex; }
+
+    .file-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #dde0ee;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      margin-top: 24px;
+      padding: 14px;
+      background: #4f6ef7;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    .btn:hover:not(:disabled) { background: #3a57e0; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { background: #2e3148; color: #5a5d6e; cursor: not-allowed; }
+
+    .status {
+      margin-top: 20px;
+      padding: 14px 16px;
+      border-radius: 10px;
+      font-size: 0.875rem;
+      display: none;
+    }
+
+    .status.visible { display: block; }
+    .status.processing { background: #1e2a4a; color: #7aa0ff; border: 1px solid #2e4070; }
+    .status.success    { background: #1a2e24; color: #5dc887; border: 1px solid #2a4a38; }
+    .status.error      { background: #2e1a1a; color: #e07070; border: 1px solid #4a2a2a; }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #7aa0ff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .download-btn {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 10px 20px;
+      background: #2a4a38;
+      color: #5dc887;
+      border: 1px solid #3a6a50;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+
+    .download-btn:hover { background: #3a6a50; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>음성 노이즈 제거</h1>
+    <p class="subtitle">WAV 파일을 업로드하면 AI 모델이 배경 소음을 제거합니다.</p>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".wav" />
+      <span class="drop-icon">🎙️</span>
+      <p class="drop-primary">파일을 드래그하거나 클릭하여 선택</p>
+      <p class="drop-secondary">WAV 형식 · 16kHz 권장</p>
+    </div>
+
+    <div class="file-info" id="fileInfo">
+      <span>📄</span>
+      <span class="file-name" id="fileName"></span>
+    </div>
+
+    <button class="btn" id="submitBtn" disabled>노이즈 제거 시작</button>
+
+    <div class="status" id="statusBox"></div>
+  </div>
+
+  <script>
+    const fileInput  = document.getElementById('fileInput');
+    const dropZone   = document.getElementById('dropZone');
+    const fileInfo   = document.getElementById('fileInfo');
+    const fileName   = document.getElementById('fileName');
+    const submitBtn  = document.getElementById('submitBtn');
+    const statusBox  = document.getElementById('statusBox');
+
+    function setFile(file) {
+      if (!file || !file.name.endsWith('.wav')) {
+        showStatus('error', 'WAV 파일만 업로드할 수 있습니다.');
+        return;
+      }
+      fileInput._file = file;
+      fileName.textContent = file.name;
+      fileInfo.classList.add('visible');
+      submitBtn.disabled = false;
+      clearStatus();
+    }
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) setFile(fileInput.files[0]);
+    });
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+    });
+
+    submitBtn.addEventListener('click', async () => {
+      const file = fileInput._file || fileInput.files[0];
+      if (!file) return;
+
+      submitBtn.disabled = true;
+      showStatus('processing', '<span class="spinner"></span>처리 중입니다. 잠시만 기다려 주세요…');
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/process_audio', { method: 'POST', body: formData });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: '서버 오류' }));
+          throw new Error(err.error || `HTTP ${res.status}`);
+        }
+
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const baseName = file.name.replace(/\.wav$/i, '');
+
+        showStatus('success',
+          `✅ 처리 완료!<br><br>
+          <a class="download-btn" href="${url}" download="denoised_${baseName}.wav">
+            ⬇ 결과 파일 다운로드
+          </a>`
+        );
+      } catch (err) {
+        showStatus('error', `오류: ${err.message}`);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    function showStatus(type, html) {
+      statusBox.className = `status visible ${type}`;
+      statusBox.innerHTML = html;
+    }
+
+    function clearStatus() {
+      statusBox.className = 'status';
+      statusBox.innerHTML = '';
+    }
+  </script>
+</body>
+</html>

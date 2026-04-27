@@ -4,7 +4,7 @@ import tempfile
 
 import librosa
 import soundfile as sf
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, render_template
 
 sys.path.insert(0, os.path.dirname(__file__))
 from src.models import UpgradedUNet
@@ -27,6 +27,11 @@ if os.path.exists(MODEL_PATH):
     print(f'모델 로드 완료: {MODEL_PATH}')
 else:
     print(f'경고: {MODEL_PATH} 가중치 파일이 없습니다.')
+
+
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 
 @app.route('/process_audio', methods=['POST'])
