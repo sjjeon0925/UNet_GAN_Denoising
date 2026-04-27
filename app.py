@@ -1,3 +1,6 @@
+import time
+import torch
+
 import os
 import sys
 import tempfile
@@ -50,8 +53,34 @@ def process_audio_api():
             file.save(temp_in.name)
 
             y, _ = librosa.load(temp_in.name, sr=16000)
+
+            # ================= [성능 측정 시작] =================
+            if torch.cuda.is_available():
+                # 이전 작업의 메모리 통계 초기화
+                torch.cuda.reset_peak_memory_stats(device)
+            
+            start_time = time.time() # 시작 시간 기록
+
+            # 실제 파이프라인 처리 (추론 및 후처리)
             denoised_y = process_overlap_add(y, model, device)
             final_y = apply_agc(denoised_y)
+
+            end_time = time.time() # 종료 시간 기록
+            
+            # 지표 계산
+            processing_time = end_time - start_time
+            
+            if torch.cuda.is_available():
+                # Byte 단위로 나오는 최대 사용량을 기가바이트(GB)로 변환
+                max_vram_bytes = torch.cuda.max_memory_allocated(device)
+                max_vram_gb = max_vram_bytes / (1024 ** 3)
+            else:
+                max_vram_gb = 0.0
+
+            # 서버 터미널에 로그 출력
+            print(f"✅ 처리 완료 | 소요 시간: {processing_time:.2f}초 | 최대 VRAM: {max_vram_gb:.4f} GB")
+            # ================= [성능 측정 종료] =================
+            
             sf.write(temp_out.name, final_y, 16000)
 
             response = send_file(temp_out.name, as_attachment=True,
